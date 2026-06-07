@@ -1,0 +1,697 @@
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0
+  }
+
+  :root {
+    --c1: #111;
+    --c2: #555;
+    --c3: #888;
+    --c4: #bbb;
+    --c5: #e8e8e8;
+    --c6: #f5f5f5;
+    --c7: #fafafa;
+    --bg: #fff;
+    --accent: #111;
+    --accent-light: #f0f0f0;
+    --green: #2d7a4f;
+    --red: #c0392b;
+    --amber: #b5700a;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --font: 'Georgia', serif
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--c1);
+    font-size: 14px;
+    line-height: 1.6
+  }
+
+  button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: 13px
+  }
+
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+    font-size: 13px;
+    border: 0.5px solid var(--c4);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    width: 100%;
+    background: var(--bg);
+    color: var(--c1)
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--c2)
+  }
+</style>
+
+<div id="app" style="min-height:600px;background:var(--bg)"></div>
+
+<script>
+  const DB = {
+    users: [
+      { id: 1, name: 'Ana García', email: 'ana@mail.com', pass: '1234', role: 'user', orders: [] },
+      { id: 2, name: 'Admin', email: 'admin@tienda.com', pass: 'admin', role: 'admin', orders: [] }
+    ],
+    products: [
+      { id: 1, name: 'Bolso de Cuero Artesanal', cat: 'Moda', price: 89, stock: 15, img: '👜', desc: 'Bolso hecho a mano con cuero genuino.', rating: 4.5, reviews: [{ user: 'María L.', stars: 5, text: 'Precioso y resistente.', date: '2026-04-10' }, { user: 'Carlos R.', stars: 4, text: 'Muy buena calidad.', date: '2026-04-22' }] },
+      { id: 2, name: 'Auriculares Premium', cat: 'Electrónica', price: 149, stock: 8, img: '🎧', desc: 'Sonido envolvente con cancelación de ruido.', rating: 4.8, reviews: [{ user: 'Pedro M.', stars: 5, text: 'El mejor sonido que he escuchado.', date: '2026-05-01' }] },
+      { id: 3, name: 'Libro de Cocina Mediterránea', cat: 'Libros', price: 29, stock: 42, img: '📖', desc: '250 recetas auténticas del Mediterráneo.', rating: 4.2, reviews: [] },
+      { id: 4, name: 'Zapatillas Running Pro', cat: 'Deporte', price: 119, stock: 20, img: '👟', desc: 'Máximo confort para tus entrenamientos.', rating: 4.6, reviews: [{ user: 'Lucía T.', stars: 5, text: 'Increíblemente cómodas.', date: '2026-04-30' }] },
+      { id: 5, name: 'Set de Ollas Inox', cat: 'Hogar', price: 79, stock: 12, img: '🍳', desc: 'Acero inoxidable premium, apto para todo tipo de cocinas.', rating: 4.3, reviews: [] },
+      { id: 6, name: 'Cámara Polaroid Vintage', cat: 'Electrónica', price: 65, stock: 5, img: '📷', desc: 'Fotos instantáneas con encanto retro.', rating: 4.7, reviews: [{ user: 'Sofía P.', stars: 5, text: 'Un regalo genial.', date: '2026-05-05' }] },
+      { id: 7, name: 'Vela Aromática Set', cat: 'Hogar', price: 24, stock: 30, img: '🕯️', desc: 'Pack de 3 velas con aromas naturales.', rating: 4.4, reviews: [] },
+      { id: 8, name: 'Mochila Urbana', cat: 'Moda', price: 55, stock: 18, img: '🎒', desc: 'Diseño moderno con compartimento para portátil.', rating: 4.1, reviews: [] }
+    ],
+    coupons: [
+      { code: 'BIENVENIDO10', discount: 10, type: 'percent', active: true, uses: 0 },
+      { code: 'VERANO5', discount: 5, type: 'fixed', active: true, uses: 0 },
+      { code: 'VIP20', discount: 20, type: 'percent', active: false, uses: 12 }
+    ],
+    orders: [
+      { id: 101, userId: 1, items: [{ pid: 1, qty: 1, price: 89 }, { pid: 3, qty: 2, price: 29 }], total: 147, coupon: null, status: 'entregado', date: '2026-04-15' },
+      { id: 102, userId: 1, items: [{ pid: 2, qty: 1, price: 149 }], total: 134.1, coupon: 'BIENVENIDO10', status: 'enviado', date: '2026-05-10' }
+    ],
+    nextOrderId: 103,
+    nextUserId: 3
+  };
+
+  let state = { view: 'shop', user: null, cart: [], appliedCoupon: null, shopFilter: 'Todos', shopSearch: '', adminTab: 'products', editProduct: null, cartOpen: false, viewProduct: null, loginMode: 'login', loginError: '', regData: { name: '', email: '', pass: '' }, checkout: false, checkoutDone: false };
+
+  function save() { try { localStorage.setItem('db', JSON.stringify(DB)) } catch (e) { } }
+
+  function render() {
+    const app = document.getElementById('app');
+    if (!app) return;
+    app.innerHTML = '';
+    const el = document.createElement('div');
+    el.style.cssText = 'min-height:600px';
+
+    if (!state.user) { el.innerHTML = renderAuth(); app.appendChild(el); bindAuth(); return; }
+    if (state.user.role === 'admin') { el.innerHTML = renderAdmin(); app.appendChild(el); bindAdmin(); return; }
+
+    el.innerHTML = renderShop();
+    app.appendChild(el);
+    bindShop();
+  }
+
+  function renderAuth() {
+    const m = state.loginMode;
+    return `<div style="display:flex;align-items:center;justify-content:center;min-height:600px;background:var(--c7)">
+  <div style="background:var(--bg);border:0.5px solid var(--c5);border-radius:var(--radius-lg);padding:40px;width:380px;max-width:100%">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-family:var(--font);font-size:26px;letter-spacing:-0.5px;margin-bottom:4px">✦ Élite Shop</div>
+      <div style="color:var(--c3);font-size:12px">${m === 'login' ? 'Accede a tu cuenta' : 'Crea tu cuenta'}</div>
+    </div>
+    ${state.loginError ? `<div style="background:#fef2f2;border:0.5px solid #fca5a5;border-radius:var(--radius);padding:10px 14px;color:var(--red);font-size:12px;margin-bottom:16px">${state.loginError}</div>` : ''}
+    ${m === 'register' ? `<div style="margin-bottom:12px"><label style="font-size:11px;color:var(--c3);display:block;margin-bottom:4px">NOMBRE COMPLETO</label><input id="rname" placeholder="Tu nombre" value="${state.regData.name}"></div>` : ''}
+    <div style="margin-bottom:12px"><label style="font-size:11px;color:var(--c3);display:block;margin-bottom:4px">EMAIL</label><input id="lemail" type="email" placeholder="tu@email.com"></div>
+    <div style="margin-bottom:20px"><label style="font-size:11px;color:var(--c3);display:block;margin-bottom:4px">CONTRASEÑA</label><input id="lpass" type="password" placeholder="••••••"></div>
+    <button id="loginBtn" style="width:100%;background:var(--c1);color:#fff;border-radius:var(--radius);padding:11px;font-size:13px;letter-spacing:0.5px">${m === 'login' ? 'ENTRAR' : 'REGISTRARSE'}</button>
+    <div style="text-align:center;margin-top:16px;font-size:12px;color:var(--c3)">
+      ${m === 'login' ? `¿Sin cuenta? <span id="switchMode" style="color:var(--c1);cursor:pointer;text-decoration:underline">Regístrate</span>` : `¿Ya tienes cuenta? <span id="switchMode" style="color:var(--c1);cursor:pointer;text-decoration:underline">Entra aquí</span>`}
+    </div>
+    <div style="margin-top:20px;padding-top:16px;border-top:0.5px solid var(--c5);font-size:11px;color:var(--c4);text-align:center">Demo: ana@mail.com / 1234 · admin@tienda.com / admin</div>
+  </div></div>`;
+  }
+
+  function bindAuth() {
+    document.getElementById('switchMode')?.addEventListener('click', () => { state.loginMode = state.loginMode === 'login' ? 'register' : 'login'; state.loginError = ''; render(); });
+    document.getElementById('loginBtn')?.addEventListener('click', () => {
+      const email = document.getElementById('lemail')?.value?.trim();
+      const pass = document.getElementById('lpass')?.value;
+      if (state.loginMode === 'login') {
+        const u = DB.users.find(u => u.email === email && u.pass === pass);
+        if (!u) { state.loginError = 'Email o contraseña incorrectos'; render(); return; }
+        state.user = u; state.loginError = '';
+      } else {
+        const name = document.getElementById('rname')?.value?.trim();
+        if (!name || !email || !pass) { state.loginError = 'Completa todos los campos'; render(); return; }
+        if (DB.users.find(u => u.email === email)) { state.loginError = 'Este email ya está registrado'; render(); return; }
+        const nu = { id: DB.nextUserId++, name, email, pass, role: 'user', orders: [] };
+        DB.users.push(nu); state.user = nu; state.loginError = ''; save();
+      }
+      render();
+    });
+  }
+
+  const cats = ['Todos', 'Moda', 'Electrónica', 'Libros', 'Deporte', 'Hogar'];
+
+  function filteredProducts() {
+    return DB.products.filter(p => {
+      const catOk = state.shopFilter === 'Todos' || p.cat === state.shopFilter;
+      const search = state.shopSearch.toLowerCase();
+      const searchOk = !search || p.name.toLowerCase().includes(search) || p.cat.toLowerCase().includes(search);
+      return catOk && searchOk;
+    });
+  }
+
+  function cartCount() { return state.cart.reduce((a, i) => a + i.qty, 0); }
+  function cartTotal() {
+    let t = state.cart.reduce((a, i) => a + i.qty * i.price, 0);
+    if (state.appliedCoupon) {
+      const c = DB.coupons.find(c => c.code === state.appliedCoupon && c.active);
+      if (c) t = c.type === 'percent' ? t * (1 - c.discount / 100) : Math.max(0, t - c.discount);
+    }
+    return t;
+  }
+  function rawCartTotal() { return state.cart.reduce((a, i) => a + i.qty * i.price, 0); }
+
+  function renderStars(r) {
+    return Array.from({ length: 5 }, (_, i) => `<span style="color:${i < Math.round(r) ? '#f0a500' : 'var(--c4)'}">★</span>`).join('');
+  }
+
+  function renderShop() {
+    if (state.checkoutDone) {
+      return `<div style="min-height:600px">
+    ${renderNavBar()}
+    <div style="display:flex;align-items:center;justify-content:center;min-height:500px">
+    <div style="text-align:center;padding:40px">
+      <div style="font-size:48px;margin-bottom:16px">✓</div>
+      <div style="font-family:var(--font);font-size:22px;margin-bottom:8px">¡Pedido realizado!</div>
+      <div style="color:var(--c3);margin-bottom:24px">Tu pedido #${DB.nextOrderId - 1} está confirmado. Recibirás un email pronto.</div>
+      <button id="continueShopping" style="background:var(--c1);color:#fff;border-radius:var(--radius);padding:10px 24px">Seguir comprando</button>
+    </div></div></div>`;
+    }
+    if (state.viewProduct) {
+      const p = DB.products.find(x => x.id === state.viewProduct);
+      if (p) return renderProductDetail(p);
+    }
+    if (state.checkout) return renderCheckout();
+
+    const prods = filteredProducts();
+    const cn = cartCount();
+
+    return `<div style="min-height:600px">
+  ${renderNavBar()}
+  <div style="padding:0 20px 40px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      ${cats.map(c => `<button class="catBtn" data-cat="${c}" style="padding:6px 14px;border-radius:20px;border:0.5px solid ${state.shopFilter === c ? 'var(--c1)' : 'var(--c5)'};background:${state.shopFilter === c ? 'var(--c1)' : 'var(--bg)'};color:${state.shopFilter === c ? '#fff' : 'var(--c2)'};font-size:12px">${c}</button>`).join('')}
+    </div>
+    ${prods.length === 0 ? '<div style="text-align:center;padding:60px;color:var(--c3)">No hay productos que coincidan.</div>' :
+        `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px">
+      ${prods.map(p => renderProductCard(p)).join('')}
+    </div>`}
+  </div>
+  ${state.cartOpen ? renderCartDrawer() : ''}
+  </div>`;
+  }
+
+  function renderNavBar() {
+    const cn = cartCount();
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid var(--c5);position:sticky;top:0;background:var(--bg);z-index:10">
+    <div style="font-family:var(--font);font-size:18px;letter-spacing:-0.3px;cursor:pointer" id="navLogo">✦ Élite Shop</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input id="searchInput" placeholder="Buscar..." value="${state.shopSearch}" style="width:150px;padding:6px 10px;font-size:12px">
+      <button id="navOrders" style="padding:6px 12px;border:0.5px solid var(--c5);border-radius:var(--radius);color:var(--c2);font-size:12px">Mis pedidos</button>
+      <button id="navCart" style="padding:6px 12px;border:0.5px solid var(--c5);border-radius:var(--radius);font-size:12px;position:relative;background:${cn > 0 ? 'var(--c1)' : 'var(--bg)'};color:${cn > 0 ? '#fff' : 'var(--c2)'}">
+        🛒 ${cn > 0 ? cn : ''}
+      </button>
+      <button id="navLogout" style="padding:6px 12px;border:0.5px solid var(--c5);border-radius:var(--radius);color:var(--c3);font-size:12px">Salir</button>
+    </div>
+  </div>`;
+  }
+
+  function renderProductCard(p) {
+    const inCart = state.cart.find(i => i.pid === p.id);
+    return `<div class="prodCard" data-pid="${p.id}" style="border:0.5px solid var(--c5);border-radius:var(--radius-lg);overflow:hidden;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--c3)'" onmouseout="this.style.borderColor='var(--c5)'">
+    <div style="background:var(--c7);height:110px;display:flex;align-items:center;justify-content:center;font-size:48px">${p.img}</div>
+    <div style="padding:12px">
+      <div style="font-size:10px;color:var(--c4);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">${p.cat}</div>
+      <div style="font-size:13px;font-weight:500;margin-bottom:4px;line-height:1.3">${p.name}</div>
+      <div style="font-size:11px;margin-bottom:6px">${renderStars(p.rating)} <span style="color:var(--c3);font-size:11px">(${p.reviews.length})</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+        <span style="font-size:15px;font-weight:500">${p.price}€</span>
+        <button class="addCartBtn" data-pid="${p.id}" style="padding:5px 10px;background:${inCart ? 'var(--c5)' : 'var(--c1)'};color:${inCart ? 'var(--c2)' : '#fff'};border-radius:var(--radius);font-size:11px" onclick="event.stopPropagation()">${inCart ? 'En carrito' : 'Añadir'}</button>
+      </div>
+      ${p.stock <= 5 ? `<div style="font-size:10px;color:var(--amber);margin-top:4px">Solo ${p.stock} disponibles</div>` : ''}
+    </div>
+  </div>`;
+  }
+
+  function renderProductDetail(p) {
+    const inCart = state.cart.find(i => i.pid === p.id);
+    return `<div style="min-height:600px">
+  ${renderNavBar()}
+  <div style="padding:20px;max-width:600px;margin:0 auto">
+    <button id="backToShop" style="color:var(--c3);font-size:12px;margin-bottom:16px">← Volver</button>
+    <div style="background:var(--c7);height:180px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;font-size:72px;margin-bottom:20px">${p.img}</div>
+    <div style="font-size:11px;color:var(--c4);letter-spacing:0.5px;margin-bottom:4px">${p.cat}</div>
+    <div style="font-family:var(--font);font-size:22px;margin-bottom:8px">${p.name}</div>
+    <div style="margin-bottom:8px">${renderStars(p.rating)} <span style="color:var(--c3);font-size:12px">${p.rating} · ${p.reviews.length} reseñas</span></div>
+    <div style="font-size:11px;color:var(--c3);margin-bottom:12px">${p.desc}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <span style="font-size:24px;font-weight:500">${p.price}€</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <button id="detailAddCart" data-pid="${p.id}" style="padding:8px 20px;background:${inCart ? 'var(--c5)' : 'var(--c1)'};color:${inCart ? 'var(--c2)' : '#fff'};border-radius:var(--radius)">
+          ${inCart ? '✓ En carrito' : 'Añadir al carrito'}
+        </button>
+        ${p.stock <= 5 ? `<span style="font-size:10px;color:var(--amber)">Solo ${p.stock} disponibles</span>` : ''}
+      </div>
+    </div>
+    <div style="border-top:0.5px solid var(--c5);padding-top:16px">
+      <div style="font-size:13px;font-weight:500;margin-bottom:12px">Reseñas de clientes</div>
+      ${p.reviews.length === 0 ? `<div style="color:var(--c3);font-size:12px">Sin reseñas aún.</div>` :
+        p.reviews.map(r => `<div style="border:0.5px solid var(--c5);border-radius:var(--radius);padding:12px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:12px;font-weight:500">${r.user}</span>
+            <span style="font-size:11px;color:var(--c4)">${r.date}</span>
+          </div>
+          <div style="margin-bottom:4px">${renderStars(r.stars)}</div>
+          <div style="font-size:12px;color:var(--c2)">${r.text}</div>
+        </div>`).join('')}
+      <div style="margin-top:16px;border-top:0.5px solid var(--c5);padding-top:12px">
+        <div style="font-size:12px;font-weight:500;margin-bottom:8px">Deja tu reseña</div>
+        <div style="display:flex;gap:4px;margin-bottom:8px" id="starPicker">
+          ${[1, 2, 3, 4, 5].map(n => `<button class="starBtn" data-star="${n}" style="font-size:20px;opacity:0.3">★</button>`).join('')}
+        </div>
+        <textarea id="reviewText" placeholder="Tu opinión..." rows="2" style="margin-bottom:8px;resize:none"></textarea>
+        <button id="submitReview" data-pid="${p.id}" style="padding:7px 16px;background:var(--c1);color:#fff;border-radius:var(--radius);font-size:12px">Publicar reseña</button>
+      </div>
+    </div>
+  </div>
+  ${state.cartOpen ? renderCartDrawer() : ''}
+  </div>`;
+  }
+
+  function renderCartDrawer() {
+    const items = state.cart;
+    const raw = rawCartTotal();
+    const total = cartTotal();
+    const discount = raw - total;
+    return `<div style="position:fixed;inset:0;z-index:50" id="cartOverlay">
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.3)" id="cartBg"></div>
+    <div style="position:absolute;right:0;top:0;bottom:0;width:320px;background:var(--bg);border-left:0.5px solid var(--c5);display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:16px;border-bottom:0.5px solid var(--c5);display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:14px;font-weight:500">Carrito (${cartCount()})</span>
+        <button id="closeCart" style="color:var(--c3);font-size:18px">×</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:12px">
+        ${items.length === 0 ? '<div style="text-align:center;padding:40px;color:var(--c3);font-size:12px">Tu carrito está vacío</div>' :
+        items.map(i => {
+          const p = DB.products.find(x => x.id === i.pid); return p ? `<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:0.5px solid var(--c6)">
+            <div style="font-size:28px;background:var(--c7);width:44px;height:44px;border-radius:var(--radius);display:flex;align-items:center;justify-content:center">${p.img}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+              <div style="font-size:12px;color:var(--c3)">${p.price}€ × ${i.qty}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <button class="qtyBtn" data-pid="${i.pid}" data-dir="-1" style="width:22px;height:22px;border:0.5px solid var(--c5);border-radius:4px;font-size:14px">−</button>
+              <span style="font-size:12px;min-width:16px;text-align:center">${i.qty}</span>
+              <button class="qtyBtn" data-pid="${i.pid}" data-dir="1" style="width:22px;height:22px;border:0.5px solid var(--c5);border-radius:4px;font-size:14px">+</button>
+            </div>
+          </div>`: ''
+        }).join('')}
+        ${items.length > 0 ? `<div style="margin-top:8px">
+          <div style="font-size:11px;color:var(--c3);margin-bottom:4px">Cupón de descuento</div>
+          <div style="display:flex;gap:6px">
+            <input id="couponInput" placeholder="CÓDIGO" value="${state.appliedCoupon || ''}" style="flex:1;padding:6px 10px;font-size:12px">
+            <button id="applyCoupon" style="padding:6px 12px;border:0.5px solid var(--c5);border-radius:var(--radius);font-size:12px;white-space:nowrap">Aplicar</button>
+          </div>
+          <div id="couponMsg" style="font-size:11px;margin-top:4px"></div>
+        </div>`: ''}
+      </div>
+      ${items.length > 0 ? `<div style="padding:16px;border-top:0.5px solid var(--c5)">
+        ${discount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--green);margin-bottom:6px"><span>Descuento</span><span>−${discount.toFixed(2)}€</span></div>` : ''}
+        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:500;margin-bottom:12px"><span>Total</span><span>${total.toFixed(2)}€</span></div>
+        <button id="goCheckout" style="width:100%;background:var(--c1);color:#fff;border-radius:var(--radius);padding:11px;font-size:13px">Finalizar compra</button>
+      </div>`: ''}
+    </div>
+  </div>`;
+  }
+
+  let selectedStars = 0;
+
+  function renderCheckout() {
+    const total = cartTotal();
+    return `<div style="min-height:600px">
+  ${renderNavBar()}
+  <div style="padding:20px;max-width:480px;margin:0 auto">
+    <button id="backToShop" style="color:var(--c3);font-size:12px;margin-bottom:16px">← Volver</button>
+    <div style="font-family:var(--font);font-size:20px;margin-bottom:20px">Finalizar compra</div>
+    <div style="border:0.5px solid var(--c5);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--c3)">RESUMEN</div>
+      ${state.cart.map(i => { const p = DB.products.find(x => x.id === i.pid); return p ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span>${p.name} ×${i.qty}</span><span>${(p.price * i.qty).toFixed(2)}€</span></div>` : '' }).join('')}
+      ${state.appliedCoupon ? `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--green);border-top:0.5px solid var(--c6);margin-top:8px;padding-top:8px"><span>Cupón ${state.appliedCoupon}</span><span>−${(rawCartTotal() - cartTotal()).toFixed(2)}€</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:500;border-top:0.5px solid var(--c5);margin-top:10px;padding-top:10px"><span>Total</span><span>${total.toFixed(2)}€</span></div>
+    </div>
+    <div style="border:0.5px solid var(--c5);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--c3)">DATOS DE ENVÍO</div>
+      <input placeholder="Dirección completa" style="margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <input placeholder="Ciudad">
+        <input placeholder="Código postal">
+      </div>
+      <input placeholder="Teléfono de contacto">
+    </div>
+    <div style="border:0.5px solid var(--c5);border-radius:var(--radius-lg);padding:16px;margin-bottom:20px">
+      <div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--c3)">PAGO (DEMO)</div>
+      <input placeholder="Número de tarjeta" style="margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <input placeholder="MM/AA">
+        <input placeholder="CVV">
+      </div>
+    </div>
+    <button id="confirmOrder" style="width:100%;background:var(--c1);color:#fff;border-radius:var(--radius);padding:12px;font-size:13px;letter-spacing:0.3px">CONFIRMAR PEDIDO (${total.toFixed(2)}€)</button>
+  </div></div>`;
+  }
+
+  function renderAdmin() {
+    const tab = state.adminTab;
+    const tabs = [['products', 'Productos'], ['inventory', 'Inventario'], ['orders', 'Pedidos'], ['coupons', 'Cupones'], ['users', 'Usuarios']];
+    return `<div style="min-height:600px">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:0.5px solid var(--c5);background:var(--c1)">
+    <div style="font-family:var(--font);font-size:16px;color:#fff;letter-spacing:-0.3px">✦ Admin Panel</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span style="font-size:11px;color:var(--c4)">Bienvenido, ${state.user.name}</span>
+      <button id="navLogout" style="padding:5px 12px;border:0.5px solid rgba(255,255,255,0.3);border-radius:var(--radius);color:#fff;font-size:11px">Salir</button>
+    </div>
+  </div>
+  <div style="display:flex;gap:0;border-bottom:0.5px solid var(--c5);background:var(--c7);overflow-x:auto">
+    ${tabs.map(([t, l]) => `<button class="adminTab" data-tab="${t}" style="padding:10px 16px;font-size:12px;border-bottom:2px solid ${tab === t ? 'var(--c1)' : 'transparent'};color:${tab === t ? 'var(--c1)' : 'var(--c3)'};white-space:nowrap;font-weight:${tab === t ? '500' : '400'}">${l}</button>`).join('')}
+  </div>
+  <div style="padding:20px">
+    ${tab === 'products' ? renderAdminProducts() : tab === 'inventory' ? renderAdminInventory() : tab === 'orders' ? renderAdminOrders() : tab === 'coupons' ? renderAdminCoupons() : renderAdminUsers()}
+  </div></div>`;
+  }
+
+  function renderAdminProducts() {
+    const ep = state.editProduct;
+    return `<div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div style="font-size:15px;font-weight:500">Gestión de productos (${DB.products.length})</div>
+    <button id="newProductBtn" style="padding:7px 14px;background:var(--c1);color:#fff;border-radius:var(--radius);font-size:12px">+ Nuevo</button>
+  </div>
+  ${ep !== null ? renderProductForm(ep) : ''}
+  <div style="display:grid;gap:8px">
+    ${DB.products.map(p => `<div style="display:flex;align-items:center;gap:12px;border:0.5px solid var(--c5);border-radius:var(--radius);padding:10px 14px">
+      <span style="font-size:24px">${p.img}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500">${p.name}</div>
+        <div style="font-size:11px;color:var(--c3)">${p.cat} · ${p.price}€ · Stock: ${p.stock}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="editProdBtn" data-pid="${p.id}" style="padding:5px 10px;border:0.5px solid var(--c5);border-radius:var(--radius);font-size:11px;color:var(--c2)">Editar</button>
+        <button class="delProdBtn" data-pid="${p.id}" style="padding:5px 10px;border:0.5px solid #fca5a5;border-radius:var(--radius);font-size:11px;color:var(--red)">Eliminar</button>
+      </div>
+    </div>`).join('')}
+  </div></div>`;
+  }
+
+  function renderProductForm(p) {
+    const isNew = p.id === null;
+    return `<div style="border:0.5px solid var(--c4);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px;background:var(--c7)">
+    <div style="font-size:13px;font-weight:500;margin-bottom:12px">${isNew ? 'Nuevo producto' : 'Editar producto'}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <input id="epName" placeholder="Nombre" value="${p.name || ''}">
+      <select id="epCat">${['Moda', 'Electrónica', 'Libros', 'Deporte', 'Hogar'].map(c => `<option ${p.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      <input id="epPrice" type="number" placeholder="Precio €" value="${p.price || ''}">
+      <input id="epStock" type="number" placeholder="Stock" value="${p.stock || ''}">
+      <input id="epImg" placeholder="Emoji" value="${p.img || '📦'}">
+    </div>
+    <textarea id="epDesc" rows="2" placeholder="Descripción" style="margin-bottom:10px;resize:none">${p.desc || ''}</textarea>
+    <div style="display:flex;gap:8px">
+      <button id="saveProdBtn" style="padding:7px 16px;background:var(--c1);color:#fff;border-radius:var(--radius);font-size:12px">Guardar</button>
+      <button id="cancelProdBtn" style="padding:7px 16px;border:0.5px solid var(--c5);border-radius:var(--radius);font-size:12px">Cancelar</button>
+    </div>
+  </div>`;
+  }
+
+  function renderAdminInventory() {
+    return `<div>
+  <div style="font-size:15px;font-weight:500;margin-bottom:16px">Control de inventario</div>
+  <div style="display:grid;gap:8px">
+    ${DB.products.map(p => `<div style="display:flex;align-items:center;gap:12px;border:0.5px solid var(--c5);border-radius:var(--radius);padding:10px 14px">
+      <span style="font-size:20px">${p.img}</span>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:500">${p.name}</div>
+        <div style="font-size:11px;color:${p.stock <= 5 ? 'var(--amber)' : p.stock === 0 ? 'var(--red)' : 'var(--c3)'}">${p.stock === 0 ? 'SIN STOCK' : p.stock <= 5 ? `⚠ Solo ${p.stock}` : `${p.stock} unidades`}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="stockBtn" data-pid="${p.id}" data-dir="-5" style="padding:4px 8px;border:0.5px solid var(--c5);border-radius:var(--radius);font-size:11px">−5</button>
+        <button class="stockBtn" data-pid="${p.id}" data-dir="-1" style="padding:4px 8px;border:0.5px solid var(--c5);border-radius:var(--radius);font-size:11px">−1</button>
+        <span style="font-size:13px;font-weight:500;min-width:28px;text-align:center">${p.stock}</span>
+        <button class="stockBtn" data-pid="${p.id}" data-dir="1" style="padding:4px 8px;border:0.5px solid var(--c5);border-radius:var(--radius);font-size:11px">+1</button>
+        <button class="stockBtn" data-pid="${p.id}" data-dir="10" style="padding:4px 8px;border:0.5px solid var(--c5);border-radius:var(--radius);font-size:11px">+10</button>
+      </div>
+    </div>`).join('')}
+  </div></div>`;
+  }
+
+  function renderAdminOrders() {
+    const allOrders = DB.orders;
+    const statuses = ['pendiente', 'procesando', 'enviado', 'entregado', 'cancelado'];
+    return `<div>
+  <div style="font-size:15px;font-weight:500;margin-bottom:16px">Todos los pedidos (${allOrders.length})</div>
+  ${allOrders.length === 0 ? '<div style="color:var(--c3);text-align:center;padding:40px">Sin pedidos aún</div>' :
+        `<div style="display:grid;gap:8px">
+    ${allOrders.map(o => {
+          const u = DB.users.find(x => x.id === o.userId);
+          const statusColor = { pendiente: 'var(--c4)', procesando: '#1e88e5', enviado: 'var(--amber)', entregado: 'var(--green)', cancelado: 'var(--red)' }[o.status] || 'var(--c4)';
+          return `<div style="border:0.5px solid var(--c5);border-radius:var(--radius);padding:12px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div>
+            <div style="font-size:13px;font-weight:500">Pedido #${o.id}</div>
+            <div style="font-size:11px;color:var(--c3)">${u?.name || 'Usuario'} · ${o.date}</div>
+            ${o.coupon ? `<div style="font-size:10px;color:var(--c4)">Cupón: ${o.coupon}</div>` : ''}
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:13px;font-weight:500">${o.total.toFixed(2)}€</div>
+            <span style="font-size:10px;color:${statusColor};border:0.5px solid ${statusColor};border-radius:10px;padding:2px 8px">${o.status}</span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--c3);margin-bottom:8px">${o.items.map(i => { const p = DB.products.find(x => x.id === i.pid); return p ? `${p.img}${p.name} ×${i.qty}` : '' }).join(' · ')}</div>
+        <select class="orderStatusSelect" data-oid="${o.id}" style="font-size:11px;padding:4px 8px;width:auto">
+          ${statuses.map(s => `<option ${o.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+      </div>`;
+        }).join('')}
+  </div>`}</div>`;
+  }
+
+  function renderAdminCoupons() {
+    return `<div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div style="font-size:15px;font-weight:500">Cupones de descuento</div>
+    <button id="newCouponBtn" style="padding:7px 14px;background:var(--c1);color:#fff;border-radius:var(--radius);font-size:12px">+ Crear</button>
+  </div>
+  <div id="couponFormArea"></div>
+  <div style="display:grid;gap:8px">
+    ${DB.coupons.map((c, i) => `<div style="display:flex;align-items:center;gap:12px;border:0.5px solid var(--c5);border-radius:var(--radius);padding:10px 14px">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500;font-family:monospace">${c.code}</div>
+        <div style="font-size:11px;color:var(--c3)">${c.type === 'percent' ? `${c.discount}% descuento` : `${c.discount}€ de descuento`} · ${c.uses} usos</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;border:0.5px solid ${c.active ? 'var(--green)' : 'var(--c4)'};color:${c.active ? 'var(--green)' : 'var(--c4)'};border-radius:10px;padding:2px 8px">${c.active ? 'Activo' : 'Inactivo'}</span>
+        <button class="toggleCoupon" data-idx="${i}" style="padding:4px 10px;border:0.5px solid var(--c5);border-radius:var(--radius);font-size:11px">${c.active ? 'Desactivar' : 'Activar'}</button>
+        <button class="delCoupon" data-idx="${i}" style="padding:4px 10px;border:0.5px solid #fca5a5;border-radius:var(--radius);font-size:11px;color:var(--red)">Eliminar</button>
+      </div>
+    </div>`).join('')}
+  </div></div>`;
+  }
+
+  function renderAdminUsers() {
+    return `<div>
+  <div style="font-size:15px;font-weight:500;margin-bottom:16px">Usuarios registrados (${DB.users.length})</div>
+  <div style="display:grid;gap:8px">
+    ${DB.users.map(u => `<div style="display:flex;align-items:center;gap:12px;border:0.5px solid var(--c5);border-radius:var(--radius);padding:10px 14px">
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--c6);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--c2)">${u.name.charAt(0)}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500">${u.name}</div>
+        <div style="font-size:11px;color:var(--c3)">${u.email} · ${DB.orders.filter(o => o.userId === u.id).length} pedidos</div>
+      </div>
+      <span style="font-size:10px;border:0.5px solid ${u.role === 'admin' ? 'var(--c1)' : 'var(--c5)'};color:${u.role === 'admin' ? 'var(--c1)' : 'var(--c3)'};border-radius:10px;padding:2px 10px">${u.role}</span>
+    </div>`).join('')}
+  </div></div>`;
+  }
+
+  function renderUserOrders() {
+    const myOrders = DB.orders.filter(o => o.userId === state.user.id);
+    return `<div style="min-height:600px">
+  ${renderNavBar()}
+  <div style="padding:20px;max-width:500px;margin:0 auto">
+    <button id="backToShop" style="color:var(--c3);font-size:12px;margin-bottom:16px">← Volver a la tienda</button>
+    <div style="font-family:var(--font);font-size:20px;margin-bottom:20px">Mis pedidos</div>
+    ${myOrders.length === 0 ? '<div style="color:var(--c3);text-align:center;padding:40px">Aún no tienes pedidos.</div>' :
+        myOrders.map(o => {
+          const statusColor = { pendiente: 'var(--c4)', procesando: '#1e88e5', enviado: 'var(--amber)', entregado: 'var(--green)', cancelado: 'var(--red)' }[o.status] || 'var(--c4)';
+          return `<div style="border:0.5px solid var(--c5);border-radius:var(--radius-lg);padding:14px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <div><div style="font-size:13px;font-weight:500">Pedido #${o.id}</div><div style="font-size:11px;color:var(--c3)">${o.date}</div></div>
+            <div style="text-align:right"><div style="font-size:13px;font-weight:500">${o.total.toFixed(2)}€</div><span style="font-size:10px;color:${statusColor};border:0.5px solid ${statusColor};border-radius:10px;padding:2px 8px">${o.status}</span></div>
+          </div>
+          <div style="font-size:11px;color:var(--c3)">${o.items.map(i => { const p = DB.products.find(x => x.id === i.pid); return p ? `${p.img} ${p.name} ×${i.qty}` : '' }).join(' · ')}</div>
+          ${o.coupon ? `<div style="font-size:10px;color:var(--green);margin-top:4px">Cupón: ${o.coupon}</div>` : ''}
+        </div>`;
+        }).join('')}
+  </div></div>`;
+  }
+
+  function bindShop() {
+    document.querySelectorAll('.catBtn').forEach(b => b.addEventListener('click', () => { state.shopFilter = b.dataset.cat; render(); }));
+    document.getElementById('searchInput')?.addEventListener('input', e => { state.shopSearch = e.target.value; render(); });
+    document.getElementById('navLogo')?.addEventListener('click', () => { state.viewProduct = null; state.checkout = false; state.checkoutDone = false; render(); });
+    document.getElementById('navOrders')?.addEventListener('click', () => {
+      document.getElementById('app').innerHTML = renderUserOrders();
+      document.getElementById('backToShop')?.addEventListener('click', () => { state.view = 'shop'; render(); });
+      document.getElementById('navLogout')?.addEventListener('click', () => { state.user = null; state.cart = []; state.cartOpen = false; render(); });
+      document.getElementById('navCart')?.addEventListener('click', () => { state.cartOpen = !state.cartOpen; render(); });
+    });
+    document.getElementById('navCart')?.addEventListener('click', () => { state.cartOpen = !state.cartOpen; render(); });
+    document.getElementById('navLogout')?.addEventListener('click', () => { state.user = null; state.cart = []; state.cartOpen = false; state.appliedCoupon = null; render(); });
+    document.querySelectorAll('.prodCard').forEach(c => c.addEventListener('click', () => { state.viewProduct = parseInt(c.dataset.pid); state.cartOpen = false; render(); }));
+    document.querySelectorAll('.addCartBtn').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      const pid = parseInt(b.dataset.pid);
+      const p = DB.products.find(x => x.id === pid);
+      if (!p || p.stock === 0) return;
+      const existing = state.cart.find(i => i.pid === pid);
+      if (existing) { if (existing.qty < p.stock) existing.qty++; }
+      else state.cart.push({ pid, qty: 1, price: p.price });
+      render();
+    }));
+    bindCartEvents();
+    bindDetailEvents();
+    bindCheckoutEvents();
+    document.getElementById('continueShopping')?.addEventListener('click', () => { state.checkoutDone = false; state.checkout = false; state.viewProduct = null; render(); });
+    document.getElementById('backToShop')?.addEventListener('click', () => { state.checkout = false; state.viewProduct = null; state.cartOpen = false; render(); });
+  }
+
+  function bindCartEvents() {
+    document.getElementById('cartBg')?.addEventListener('click', () => { state.cartOpen = false; render(); });
+    document.getElementById('closeCart')?.addEventListener('click', () => { state.cartOpen = false; render(); });
+    document.querySelectorAll('.qtyBtn').forEach(b => b.addEventListener('click', () => {
+      const pid = parseInt(b.dataset.pid); const dir = parseInt(b.dataset.dir);
+      const item = state.cart.find(i => i.pid === pid);
+      if (!item) return;
+      const p = DB.products.find(x => x.id === pid);
+      item.qty += dir;
+      if (item.qty <= 0) state.cart = state.cart.filter(i => i.pid !== pid);
+      else if (p && item.qty > p.stock) item.qty = p.stock;
+      render();
+    }));
+    document.getElementById('applyCoupon')?.addEventListener('click', () => {
+      const code = document.getElementById('couponInput')?.value?.trim().toUpperCase();
+      const c = DB.coupons.find(c => c.code === code && c.active);
+      const msg = document.getElementById('couponMsg');
+      if (c) { state.appliedCoupon = code; if (msg) { msg.style.color = 'var(--green)'; msg.textContent = '✓ Cupón aplicado: ' + (c.type === 'percent' ? c.discount + '% de descuento' : c.discount + '€ de descuento'); } }
+      else { state.appliedCoupon = null; if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Cupón no válido o inactivo'; } }
+      render();
+    });
+    document.getElementById('goCheckout')?.addEventListener('click', () => { state.cartOpen = false; state.checkout = true; render(); });
+  }
+
+  function bindDetailEvents() {
+    document.getElementById('detailAddCart')?.addEventListener('click', function () {
+      const pid = parseInt(this.dataset.pid);
+      const p = DB.products.find(x => x.id === pid);
+      if (!p || p.stock === 0) return;
+      const existing = state.cart.find(i => i.pid === pid);
+      if (existing) { if (existing.qty < p.stock) existing.qty++; }
+      else state.cart.push({ pid, qty: 1, price: p.price });
+      render();
+    });
+    document.getElementById('backToShop')?.addEventListener('click', () => { state.viewProduct = null; state.checkout = false; render(); });
+    document.querySelectorAll('.starBtn').forEach(b => b.addEventListener('click', () => {
+      selectedStars = parseInt(b.dataset.star);
+      document.querySelectorAll('.starBtn').forEach((s, i) => { s.style.opacity = i < selectedStars ? '1' : '0.3'; });
+    }));
+    document.getElementById('submitReview')?.addEventListener('click', function () {
+      const pid = parseInt(this.dataset.pid);
+      const text = document.getElementById('reviewText')?.value?.trim();
+      if (!selectedStars || !text) return;
+      const p = DB.products.find(x => x.id === pid);
+      if (!p) return;
+      p.reviews.push({ user: state.user.name, stars: selectedStars, text, date: new Date().toISOString().slice(0, 10) });
+      p.rating = +(p.reviews.reduce((a, r) => a + r.stars, 0) / p.reviews.length).toFixed(1);
+      selectedStars = 0; save(); render();
+    });
+  }
+
+  function bindCheckoutEvents() {
+    document.getElementById('confirmOrder')?.addEventListener('click', () => {
+      if (state.cart.length === 0) return;
+      const order = { id: DB.nextOrderId++, userId: state.user.id, items: state.cart.map(i => ({ pid: i.pid, qty: i.qty, price: i.price })), total: cartTotal(), coupon: state.appliedCoupon || null, status: 'pendiente', date: new Date().toISOString().slice(0, 10) };
+      state.cart.forEach(i => { const p = DB.products.find(x => x.id === i.pid); if (p) p.stock = Math.max(0, p.stock - i.qty); });
+      if (state.appliedCoupon) { const c = DB.coupons.find(c => c.code === state.appliedCoupon); if (c) c.uses++; }
+      DB.orders.push(order); state.cart = []; state.appliedCoupon = null; state.checkout = false; state.checkoutDone = true; save(); render();
+    });
+  }
+
+  function bindAdmin() {
+    document.querySelectorAll('.adminTab').forEach(b => b.addEventListener('click', () => { state.adminTab = b.dataset.tab; state.editProduct = null; render(); }));
+    document.getElementById('navLogout')?.addEventListener('click', () => { state.user = null; state.cart = []; render(); });
+    document.getElementById('newProductBtn')?.addEventListener('click', () => { state.editProduct = { id: null, name: '', cat: 'Moda', price: '', stock: '', img: '📦', desc: '' }; render(); });
+    document.querySelectorAll('.editProdBtn').forEach(b => b.addEventListener('click', () => { const p = DB.products.find(x => x.id === parseInt(b.dataset.pid)); if (p) state.editProduct = { ...p }; render(); }));
+    document.querySelectorAll('.delProdBtn').forEach(b => b.addEventListener('click', () => { if (confirm('¿Eliminar este producto?')) { DB.products = DB.products.filter(p => p.id !== parseInt(b.dataset.pid)); save(); render(); } else render(); }));
+    document.getElementById('saveProdBtn')?.addEventListener('click', () => {
+      const ep = state.editProduct;
+      const name = document.getElementById('epName')?.value?.trim();
+      const cat = document.getElementById('epCat')?.value;
+      const price = parseFloat(document.getElementById('epPrice')?.value);
+      const stock = parseInt(document.getElementById('epStock')?.value);
+      const img = document.getElementById('epImg')?.value || '📦';
+      const desc = document.getElementById('epDesc')?.value?.trim();
+      if (!name || isNaN(price) || isNaN(stock)) return;
+      if (ep.id === null) { const id = Math.max(...DB.products.map(p => p.id), 0) + 1; DB.products.push({ id, name, cat, price, stock, img, desc, rating: 0, reviews: [] }); }
+      else { const p = DB.products.find(x => x.id === ep.id); if (p) Object.assign(p, { name, cat, price, stock, img, desc }); }
+      state.editProduct = null; save(); render();
+    });
+    document.getElementById('cancelProdBtn')?.addEventListener('click', () => { state.editProduct = null; render(); });
+    document.querySelectorAll('.stockBtn').forEach(b => b.addEventListener('click', () => {
+      const p = DB.products.find(x => x.id === parseInt(b.dataset.pid));
+      if (p) { p.stock = Math.max(0, p.stock + parseInt(b.dataset.dir)); save(); render(); }
+    }));
+    document.querySelectorAll('.orderStatusSelect').forEach(s => s.addEventListener('change', () => {
+      const o = DB.orders.find(x => x.id === parseInt(s.dataset.oid));
+      if (o) { o.status = s.value; save(); }
+    }));
+    document.getElementById('newCouponBtn')?.addEventListener('click', () => {
+      const area = document.getElementById('couponFormArea');
+      if (!area) return;
+      area.innerHTML = `<div style="border:0.5px solid var(--c4);border-radius:var(--radius-lg);padding:14px;margin-bottom:14px;background:var(--c7)">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <input id="ncCode" placeholder="CÓDIGO" style="font-family:monospace">
+        <input id="ncVal" type="number" placeholder="Valor">
+        <select id="ncType"><option value="percent">Porcentaje (%)</option><option value="fixed">Fijo (€)</option></select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="saveCouponBtn" style="padding:7px 14px;background:var(--c1);color:#fff;border-radius:var(--radius);font-size:12px">Guardar cupón</button>
+        <button id="cancelCouponBtn" style="padding:7px 14px;border:0.5px solid var(--c5);border-radius:var(--radius);font-size:12px">Cancelar</button>
+      </div>
+    </div>`;
+      document.getElementById('cancelCouponBtn')?.addEventListener('click', () => { area.innerHTML = ''; });
+      document.getElementById('saveCouponBtn')?.addEventListener('click', () => {
+        const code = document.getElementById('ncCode')?.value?.trim().toUpperCase();
+        const val = parseFloat(document.getElementById('ncVal')?.value);
+        const type = document.getElementById('ncType')?.value;
+        if (!code || isNaN(val)) return;
+        DB.coupons.push({ code, discount: val, type, active: true, uses: 0 });
+        save(); render();
+      });
+    });
+    document.querySelectorAll('.toggleCoupon').forEach(b => b.addEventListener('click', () => { DB.coupons[parseInt(b.dataset.idx)].active = !DB.coupons[parseInt(b.dataset.idx)].active; save(); render(); }));
+    document.querySelectorAll('.delCoupon').forEach(b => b.addEventListener('click', () => { DB.coupons.splice(parseInt(b.dataset.idx), 1); save(); render(); }));
+  }
+
+  render();
+</script>
